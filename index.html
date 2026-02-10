@@ -75,9 +75,11 @@
 
     <script>
         // Configuration
+        // Note: This is a static website. Password is client-side only for basic access control.
+        // For real security, server-side authentication would be required.
         const CONFIG = {
-            password: 'valentine2024',
-            emailEndpoint: 'https://formsubmit.co/your-email@example.com'
+            password: 'valentine2024', // Change this to your desired password
+            emailEndpoint: 'https://formsubmit.co/your-email@example.com' // Replace with your email
         };
 
         // Views Object - SPA-style navigation
@@ -392,6 +394,7 @@
             formData.append('Datum', new Date().toLocaleDateString('de-DE'));
             
             // Submit to formsubmit.co
+            // Note: For demo purposes, we show success. In production, configure CONFIG.emailEndpoint with your email.
             fetch(CONFIG.emailEndpoint, {
                 method: 'POST',
                 body: formData,
@@ -408,7 +411,12 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-                showSuccessMessage(); // Show success anyway for demo purposes
+                // For demo/offline use, show success. In production with configured email, this should show an error.
+                if (CONFIG.emailEndpoint.includes('your-email@example.com')) {
+                    showSuccessMessage(); // Demo mode - no real email configured
+                } else {
+                    alert('Fehler beim Senden. Bitte versuche es später erneut.');
+                }
             });
         }
 
