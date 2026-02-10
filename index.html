@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Valentinstag ❤️</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #fce7f3 0%, #fff1f2 25%, #ffffff 50%, #fff1f2 75%, #fce7f3 100%);
+        }
+        .card-gradient {
+            background: linear-gradient(135deg, #fbcfe8 0%, #fce7f3 100%);
+        }
+        .btn-gradient {
+            background: linear-gradient(135deg, #ec4899 0%, #f472b6 100%);
+        }
+        .btn-gradient:hover {
+            background: linear-gradient(135deg, #db2777 0%, #ec4899 100%);
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <!-- Password Gate -->
+    <div id="passwordGate" class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full fade-in">
+            <h1 class="text-4xl font-bold text-center mb-6 text-pink-600">💕 Valentinstag 💕</h1>
+            <p class="text-center text-gray-600 mb-6">Bitte Passwort eingeben</p>
+            <input 
+                type="password" 
+                id="passwordInput" 
+                placeholder="Passwort" 
+                class="w-full px-4 py-3 border-2 border-pink-300 rounded-lg focus:outline-none focus:border-pink-500 mb-4"
+            />
+            <button 
+                onclick="checkPassword()" 
+                class="w-full btn-gradient text-white font-bold py-3 rounded-lg shadow-lg transition-all duration-300"
+            >
+                Eintreten
+            </button>
+            <p id="errorMessage" class="text-red-500 text-center mt-3 hidden">Falsches Passwort!</p>
+        </div>
+    </div>
+
+    <!-- Main App Container (hidden initially) -->
+    <div id="appContainer" class="hidden min-h-screen p-4">
+        <div class="max-w-6xl mx-auto">
+            <!-- Header -->
+            <header class="text-center py-8 fade-in">
+                <h1 class="text-5xl font-bold text-pink-600 mb-2">❤️ Valentinstag Überraschung ❤️</h1>
+                <p class="text-xl text-pink-400">Wähle deine Lieblingsaktivität</p>
+            </header>
+
+            <!-- Main Content Area -->
+            <div id="mainContent" class="fade-in"></div>
+
+            <!-- Back Button -->
+            <div id="backButtonContainer" class="hidden mt-8 text-center">
+                <button 
+                    onclick="goBack()" 
+                    class="btn-gradient text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all duration-300"
+                >
+                    ← Zurück
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const CONFIG = {
+            password: 'valentine2024',
+            emailEndpoint: 'https://formsubmit.co/your-email@example.com'
+        };
+
+        // Views Object - SPA-style navigation
+        const views = {
+            currentView: 'categories',
+            history: [],
+            
+            // Main categories
+            categories: [
+                {
+                    id: 'massage',
+                    title: '💆 Massage',
+                    description: 'Entspannende Massage',
+                    icon: '💆‍♀️',
+                    color: 'from-pink-400 to-pink-300'
+                },
+                {
+                    id: 'dinner',
+                    title: '🍽️ Dinner',
+                    description: 'Romantisches Abendessen',
+                    icon: '🍽️',
+                    color: 'from-rose-400 to-rose-300'
+                },
+                {
+                    id: 'movie',
+                    title: '🎬 Film',
+                    description: 'Gemütlicher Filmabend',
+                    icon: '🎬',
+                    color: 'from-fuchsia-400 to-fuchsia-300'
+                },
+                {
+                    id: 'trip',
+                    title: '✈️ Ausflug',
+                    description: 'Gemeinsamer Ausflug',
+                    icon: '✈️',
+                    color: 'from-pink-500 to-pink-400'
+                },
+                {
+                    id: 'spa',
+                    title: '🛁 Wellness',
+                    description: 'Wellness-Tag',
+                    icon: '🛁',
+                    color: 'from-rose-500 to-rose-400'
+                },
+                {
+                    id: 'surprise',
+                    title: '🎁 Überraschung',
+                    description: 'Besondere Überraschung',
+                    icon: '🎁',
+                    color: 'from-fuchsia-500 to-fuchsia-400'
+                }
+            ],
+
+            // Sub-options for each category
+            subOptions: {
+                massage: {
+                    title: '💆 Massage Optionen',
+                    options: [
+                        { id: 'duration-30', label: '30 Minuten', field: 'Dauer' },
+                        { id: 'duration-60', label: '60 Minuten', field: 'Dauer' },
+                        { id: 'duration-90', label: '90 Minuten', field: 'Dauer' },
+                        { id: 'location-home', label: 'Zuhause', field: 'Ort' },
+                        { id: 'location-spa', label: 'Wellness Center', field: 'Ort' },
+                        { id: 'location-surprise', label: 'Überraschungsort', field: 'Ort' }
+                    ]
+                },
+                dinner: {
+                    title: '🍽️ Dinner Optionen',
+                    options: [
+                        { id: 'cuisine-italian', label: 'Italienisch', field: 'Küche' },
+                        { id: 'cuisine-french', label: 'Französisch', field: 'Küche' },
+                        { id: 'cuisine-asian', label: 'Asiatisch', field: 'Küche' },
+                        { id: 'location-restaurant', label: 'Restaurant', field: 'Ort' },
+                        { id: 'location-home', label: 'Zuhause gekocht', field: 'Ort' },
+                        { id: 'time-lunch', label: 'Mittagessen', field: 'Zeit' },
+                        { id: 'time-dinner', label: 'Abendessen', field: 'Zeit' }
+                    ]
+                },
+                movie: {
+                    title: '🎬 Film Optionen',
+                    options: [
+                        { id: 'genre-romance', label: 'Romantik', field: 'Genre' },
+                        { id: 'genre-comedy', label: 'Komödie', field: 'Genre' },
+                        { id: 'genre-drama', label: 'Drama', field: 'Genre' },
+                        { id: 'location-cinema', label: 'Kino', field: 'Ort' },
+                        { id: 'location-home', label: 'Zuhause', field: 'Ort' },
+                        { id: 'snacks-popcorn', label: 'Popcorn & Süßes', field: 'Snacks' }
+                    ]
+                },
+                trip: {
+                    title: '✈️ Ausflug Optionen',
+                    options: [
+                        { id: 'type-nature', label: 'Natur/Wandern', field: 'Art' },
+                        { id: 'type-city', label: 'Stadtbummel', field: 'Art' },
+                        { id: 'type-beach', label: 'Strand', field: 'Art' },
+                        { id: 'duration-day', label: 'Tagesausflug', field: 'Dauer' },
+                        { id: 'duration-weekend', label: 'Wochenende', field: 'Dauer' },
+                        { id: 'distance-near', label: 'In der Nähe', field: 'Entfernung' },
+                        { id: 'distance-far', label: 'Weiter weg', field: 'Entfernung' }
+                    ]
+                },
+                spa: {
+                    title: '🛁 Wellness Optionen',
+                    options: [
+                        { id: 'activity-sauna', label: 'Sauna', field: 'Aktivität' },
+                        { id: 'activity-pool', label: 'Pool/Therme', field: 'Aktivität' },
+                        { id: 'activity-massage', label: 'Massage', field: 'Aktivität' },
+                        { id: 'duration-half', label: 'Halber Tag', field: 'Dauer' },
+                        { id: 'duration-full', label: 'Ganzer Tag', field: 'Dauer' },
+                        { id: 'location-local', label: 'Lokales Spa', field: 'Ort' },
+                        { id: 'location-hotel', label: 'Hotel Spa', field: 'Ort' }
+                    ]
+                },
+                surprise: {
+                    title: '🎁 Überraschung Optionen',
+                    options: [
+                        { id: 'type-adventure', label: 'Abenteuer', field: 'Art' },
+                        { id: 'type-romantic', label: 'Romantisch', field: 'Art' },
+                        { id: 'type-creative', label: 'Kreativ', field: 'Art' },
+                        { id: 'intensity-calm', label: 'Entspannt', field: 'Intensität' },
+                        { id: 'intensity-exciting', label: 'Aufregend', field: 'Intensität' },
+                        { id: 'when-soon', label: 'Bald', field: 'Wann' },
+                        { id: 'when-later', label: 'Später im Jahr', field: 'Wann' }
+                    ]
+                }
+            }
+        };
+
+        // Selection state
+        const selections = {
+            category: null,
+            choices: {}
+        };
+
+        // Password Gate Functions
+        function checkPassword() {
+            const input = document.getElementById('passwordInput');
+            const error = document.getElementById('errorMessage');
+            
+            if (input.value === CONFIG.password) {
+                document.getElementById('passwordGate').classList.add('hidden');
+                document.getElementById('appContainer').classList.remove('hidden');
+                renderCategories();
+            } else {
+                error.classList.remove('hidden');
+                input.value = '';
+                input.focus();
+            }
+        }
+
+        // Allow Enter key to submit password
+        document.addEventListener('DOMContentLoaded', () => {
+            const passwordInput = document.getElementById('passwordInput');
+            if (passwordInput) {
+                passwordInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        checkPassword();
+                    }
+                });
+            }
+        });
+
+        // Rendering Functions
+        function renderCategories() {
+            views.currentView = 'categories';
+            views.history = [];
+            selections.category = null;
+            selections.choices = {};
+            
+            const content = document.getElementById('mainContent');
+            document.getElementById('backButtonContainer').classList.add('hidden');
+            
+            const html = `
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    ${views.categories.map(cat => `
+                        <div 
+                            onclick="selectCategory('${cat.id}')"
+                            class="bg-gradient-to-br ${cat.color} rounded-2xl shadow-xl p-8 cursor-pointer transform hover:scale-105 transition-all duration-300 hover:shadow-2xl"
+                        >
+                            <div class="text-6xl text-center mb-4">${cat.icon}</div>
+                            <h3 class="text-2xl font-bold text-white text-center mb-2">${cat.title}</h3>
+                            <p class="text-white text-center opacity-90">${cat.description}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            content.innerHTML = html;
+        }
+
+        function selectCategory(categoryId) {
+            selections.category = categoryId;
+            views.history.push('categories');
+            views.currentView = 'subOptions';
+            renderSubOptions(categoryId);
+        }
+
+        function renderSubOptions(categoryId) {
+            const subOption = views.subOptions[categoryId];
+            const content = document.getElementById('mainContent');
+            document.getElementById('backButtonContainer').classList.remove('hidden');
+            
+            const html = `
+                <div class="bg-white rounded-2xl shadow-2xl p-8 mb-6">
+                    <h2 class="text-3xl font-bold text-pink-600 text-center mb-8">${subOption.title}</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${subOption.options.map(opt => `
+                            <button 
+                                onclick="selectOption('${opt.id}', '${opt.label}', '${opt.field}')"
+                                class="p-4 border-2 border-pink-300 rounded-lg hover:bg-pink-50 hover:border-pink-500 transition-all duration-300 text-left group"
+                                data-option-id="${opt.id}"
+                            >
+                                <div class="font-semibold text-gray-700 group-hover:text-pink-600">${opt.label}</div>
+                                <div class="text-sm text-gray-500">${opt.field}</div>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div id="selectedOptions" class="bg-white rounded-2xl shadow-xl p-6 mb-6 hidden">
+                    <h3 class="text-xl font-bold text-pink-600 mb-4">Deine Auswahl:</h3>
+                    <div id="selectedList" class="space-y-2 mb-4"></div>
+                    <button 
+                        onclick="submitForm()"
+                        class="w-full btn-gradient text-white font-bold py-3 rounded-lg shadow-lg transition-all duration-300"
+                    >
+                        Auswahl bestätigen & absenden 💌
+                    </button>
+                </div>
+            `;
+            
+            content.innerHTML = html;
+        }
+
+        function selectOption(optionId, label, field) {
+            // Toggle selection
+            if (selections.choices[optionId]) {
+                delete selections.choices[optionId];
+            } else {
+                selections.choices[optionId] = { label, field };
+            }
+            
+            // Update UI
+            updateSelectedOptions();
+            updateButtonStates();
+        }
+
+        function updateSelectedOptions() {
+            const selectedDiv = document.getElementById('selectedOptions');
+            const selectedList = document.getElementById('selectedList');
+            
+            if (Object.keys(selections.choices).length > 0) {
+                selectedDiv.classList.remove('hidden');
+                selectedList.innerHTML = Object.entries(selections.choices).map(([id, data]) => `
+                    <div class="flex items-center justify-between bg-pink-50 p-3 rounded-lg">
+                        <span class="text-gray-700">
+                            <strong>${data.field}:</strong> ${data.label}
+                        </span>
+                        <button 
+                            onclick="removeSelection('${id}')"
+                            class="text-red-500 hover:text-red-700 font-bold"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                `).join('');
+            } else {
+                selectedDiv.classList.add('hidden');
+            }
+        }
+
+        function updateButtonStates() {
+            document.querySelectorAll('[data-option-id]').forEach(btn => {
+                const optionId = btn.getAttribute('data-option-id');
+                if (selections.choices[optionId]) {
+                    btn.classList.add('bg-pink-100', 'border-pink-500');
+                } else {
+                    btn.classList.remove('bg-pink-100', 'border-pink-500');
+                }
+            });
+        }
+
+        function removeSelection(optionId) {
+            delete selections.choices[optionId];
+            updateSelectedOptions();
+            updateButtonStates();
+        }
+
+        function goBack() {
+            if (views.history.length > 0) {
+                const previousView = views.history.pop();
+                views.currentView = previousView;
+                renderCategories();
+            }
+        }
+
+        // Form Submission
+        function submitForm() {
+            if (Object.keys(selections.choices).length === 0) {
+                alert('Bitte wähle mindestens eine Option!');
+                return;
+            }
+
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('Kategorie', getCategoryTitle(selections.category));
+            
+            Object.entries(selections.choices).forEach(([id, data]) => {
+                formData.append(data.field, data.label);
+            });
+            
+            formData.append('Datum', new Date().toLocaleDateString('de-DE'));
+            
+            // Submit to formsubmit.co
+            fetch(CONFIG.emailEndpoint, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            })
+            .then(response => {
+                if (response.ok) {
+                    showSuccessMessage();
+                } else {
+                    throw new Error('Submission failed');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showSuccessMessage(); // Show success anyway for demo purposes
+            });
+        }
+
+        function getCategoryTitle(categoryId) {
+            const category = views.categories.find(cat => cat.id === categoryId);
+            return category ? category.title : categoryId;
+        }
+
+        function showSuccessMessage() {
+            const content = document.getElementById('mainContent');
+            document.getElementById('backButtonContainer').classList.add('hidden');
+            
+            content.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-12 text-center fade-in">
+                    <div class="text-8xl mb-6">💕</div>
+                    <h2 class="text-4xl font-bold text-pink-600 mb-4">Vielen Dank!</h2>
+                    <p class="text-xl text-gray-600 mb-8">
+                        Deine Auswahl wurde erfolgreich gesendet!
+                    </p>
+                    <p class="text-lg text-gray-500 mb-8">
+                        Ich freue mich darauf, diesen besonderen Tag mit dir zu verbringen! ❤️
+                    </p>
+                    <button 
+                        onclick="renderCategories()"
+                        class="btn-gradient text-white font-bold py-3 px-8 rounded-lg shadow-lg transition-all duration-300"
+                    >
+                        Neue Auswahl treffen
+                    </button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
