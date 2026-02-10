@@ -1,0 +1,7 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+[dev]
+  command = "python3 -m http.server 8000"
+  port = 8000

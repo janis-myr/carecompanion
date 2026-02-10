@@ -833,35 +833,65 @@ function submitForm() {
     // FormSubmit extras
     formData.append('_subject', `Wunsch von carecompanion`);
     formData.append('_captcha', 'false');
-    // If EmailJS is configured, try sending via EmailJS first (client-side)
+    // Try serverless function first (Netlify/Vercel). If unavailable, fall back to EmailJS -> iframe -> mailto.
+    const payload = { category: getCategoryTitle(selections.category), date: new Date().toLocaleDateString('de-DE'), _subject: `Wunsch von carecompanion` };
+    Object.entries(selections.choices).forEach(([id, d]) => {
+        // accumulate choices as text for serverless
+        if (!payload.choices) payload.choices = '';
+        payload.choices += `${d.field}: ${d.label}\n`;
+        // echo individual fields too
+        payload[d.field] = d.label;
+    });
+
+    // endpoint for Netlify functions
+    const serverlessEndpoint = '/.netlify/functions/send-email';
+    try {
+        if (DEBUG) console.log('Submitting to serverless endpoint', serverlessEndpoint, payload);
+        const res = await fetch(serverlessEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            if (DEBUG) console.log('Serverless send OK');
+            showSuccessMessage();
+            return;
+        } else {
+            const text = await res.text();
+            if (DEBUG) console.warn('Serverless send failed', res.status, text);
+            showToast('Serverless send fehlgeschlagen, versuche Fallback');
+            // continue to next fallback
+        }
+    } catch (err) {
+        if (DEBUG) console.warn('Serverless request error', err);
+        // continue to next fallback
+    }
+
+    // If EmailJS is configured, try sending via EmailJS next (client-side)
     const emailjsAvailable = window.emailjs && CONFIG.emailjs && CONFIG.emailjs.user && CONFIG.emailjs.service && CONFIG.emailjs.template;
     if (DEBUG) console.log('submitForm emailjsAvailable=', !!emailjsAvailable);
     if (emailjsAvailable) {
-        const choicesText = Object.entries(selections.choices).map(([id, d]) => `${d.field}: ${d.label}`).join('\n');
+        const choicesText = payload.choices || '';
         const templateParams = {
-            category: getCategoryTitle(selections.category),
+            category: payload.category,
             choices: choicesText,
-            date: new Date().toLocaleDateString('de-DE')
+            date: payload.date
         };
-            try {
-                if (DEBUG) console.log('Attempt EmailJS send', CONFIG.emailjs);
-                showToast('Sende per EmailJS...');
-                emailjs.send(CONFIG.emailjs.service, CONFIG.emailjs.template, templateParams, CONFIG.emailjs.user)
-                .then(() => { if (DEBUG) console.log('EmailJS send OK'); showSuccessMessage(); })
-                .catch(err => {
-                    console.error('EmailJS send failed', err);
-                    showToast('EmailJS fehlgeschlagen, versuche Fallback');
-                    submitViaIframe(formData);
-                });
-                return;
-            } catch (e) {
-                console.error('EmailJS error', e);
-                submitViaIframe(formData);
-                return;
-            }
+        try {
+            if (DEBUG) console.log('Attempt EmailJS send', CONFIG.emailjs);
+            showToast('Sende per EmailJS...');
+            await emailjs.send(CONFIG.emailjs.service, CONFIG.emailjs.template, templateParams, CONFIG.emailjs.user);
+            if (DEBUG) console.log('EmailJS send OK');
+            showSuccessMessage();
+            return;
+        } catch (err) {
+            console.error('EmailJS send failed', err);
+            showToast('EmailJS fehlgeschlagen, versuche Fallback');
+            // fallthrough
+        }
     }
 
-    // Fallback: submit via hidden iframe to avoid navigation and avoid CORS/fetch redirect issues
+    // Final fallback: submit via hidden iframe to FormSubmit
     submitViaIframe(formData);
 }
 
