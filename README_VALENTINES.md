@@ -4,7 +4,7 @@ Eine statische Single-Page-Application für einen besonderen Valentinstag!
 
 ## Features
 
-- ✅ **Passwort-Schutz**: JavaScript-basiertes Password-Gate
+- ✅ **Passwort-Schutz**: JavaScript-basiertes Passwort-Gate
 - ✅ **Tailwind CSS**: Rosa-Weiß Farbschema mit Gradients
 - ✅ **SPA-Architektur**: Views-Objekt für Navigation ohne Seitenwechsel
 - ✅ **Grid-System**: Kategorien-basierte Navigation

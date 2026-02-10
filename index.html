@@ -77,9 +77,10 @@
         // Configuration
         // Note: This is a static website. Password is client-side only for basic access control.
         // For real security, server-side authentication would be required.
+        const DEFAULT_EMAIL_PLACEHOLDER = 'your-email@example.com';
         const CONFIG = {
             password: 'valentine2024', // Change this to your desired password
-            emailEndpoint: 'https://formsubmit.co/your-email@example.com' // Replace with your email
+            emailEndpoint: `https://formsubmit.co/${DEFAULT_EMAIL_PLACEHOLDER}` // Replace with your email
         };
 
         // Views Object - SPA-style navigation
@@ -412,7 +413,7 @@
             .catch(error => {
                 console.error('Error:', error);
                 // For demo/offline use, show success. In production with configured email, this should show an error.
-                if (CONFIG.emailEndpoint.includes('your-email@example.com')) {
+                if (CONFIG.emailEndpoint.includes(DEFAULT_EMAIL_PLACEHOLDER)) {
                     showSuccessMessage(); // Demo mode - no real email configured
                 } else {
                     alert('Fehler beim Senden. Bitte versuche es später erneut.');
