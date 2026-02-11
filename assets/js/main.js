@@ -32,10 +32,9 @@ CONFIG.gifs = {
     ]
 };
 
-// allow auto-scan of the gifs folder when possible (will try to parse directory listing HTML)
-// set to true to attempt automatic discovery of added GIFs; if server doesn't allow
-// directory listing we'll gracefully fall back to the explicit `files` list.
-CONFIG.gifs.autoScan = true;
+// allow auto-scan of the gifs folder when possible. Default: disabled —
+// use the explicit `CONFIG.gifs.files` list for predictable behavior.
+CONFIG.gifs.autoScan = false;
 
 // GIF flyby runtime state
 let _gifFlybyTimer = null;
@@ -52,52 +51,39 @@ function shuffleArray(arr) {
 async function startGifFlybys(count = 1, spawnInterval = 3300, duration = 2800) {
     if (_gifFlybyActive) return;
     _gifFlybyActive = true;
-    // build runtime pool (try index.json first, then auto-scan directory listing, otherwise use configured list)
-    const pool = await (async function buildGifPool() {
-        if (CONFIG.gifs.autoScan) {
-            // Try explicit index.json first (reliable across hosts)
-            try {
-                const idxUrl = `${CONFIG.gifs.folder.replace(/\/$/, '')}/index.json`;
-                const idxRes = await fetch(idxUrl, { method: 'GET' });
-                if (idxRes.ok) {
-                    const arr = await idxRes.json();
-                    if (Array.isArray(arr) && arr.length > 0) return arr.slice();
-                }
-            } catch (e) {
-                if (DEBUG) console.warn('GIF index.json fetch failed', e);
+    // Use explicit list unless autoScan is enabled.
+    const pool = (CONFIG.gifs.autoScan === true) ? await (async function buildGifPool() {
+        // (auto-scan path preserved but disabled by default)
+        try {
+            const idxUrl = `${CONFIG.gifs.folder.replace(/\/$/, '')}/index.json`;
+            const idxRes = await fetch(idxUrl, { method: 'GET' });
+            if (idxRes.ok) {
+                const arr = await idxRes.json();
+                if (Array.isArray(arr) && arr.length > 0) return arr.slice();
             }
-
-            // fallback: try directory HTML listing parsing
-            try {
-                const folderUrl = CONFIG.gifs.folder.replace(/\/$/, '') + '/';
-                const res = await fetch(folderUrl, { method: 'GET' });
-                const ct = res.headers.get('content-type') || '';
-                if (res.ok && ct.includes('text/html')) {
-                    const html = await res.text();
-                    // simple regex to find links to gif files in directory listing
-                    const re = /href="([^\"]+\.(?:gif|GIF))"/g;
-                    const found = [];
-                    let m;
-                    while ((m = re.exec(html)) !== null) {
-                        let p = m[1];
-                        // normalize: if the link is absolute or relative
-                        if (!p.startsWith('http') && !p.startsWith('/')) {
-                            // relative to folderUrl
-                            p = folderUrl + p;
-                        }
-                        // extract filename
-                        const parts = p.split('/');
-                        const filename = parts[parts.length - 1];
-                        if (filename && !found.includes(filename)) found.push(filename);
-                    }
-                    if (found.length > 0) return found;
+        } catch (e) { if (DEBUG) console.warn('GIF index.json fetch failed', e); }
+        try {
+            const folderUrl = CONFIG.gifs.folder.replace(/\/$/, '') + '/';
+            const res = await fetch(folderUrl, { method: 'GET' });
+            const ct = res.headers.get('content-type') || '';
+            if (res.ok && ct.includes('text/html')) {
+                const html = await res.text();
+                const re = /href="([^\"]+\.(?:gif|GIF))"/g;
+                const found = [];
+                let m;
+                while ((m = re.exec(html)) !== null) {
+                    let p = m[1];
+                    if (!p.startsWith('http') && !p.startsWith('/')) p = folderUrl + p;
+                    const parts = p.split('/');
+                    const filename = parts[parts.length - 1];
+                    if (filename && !found.includes(filename)) found.push(filename);
                 }
-            } catch (e) {
-                if (DEBUG) console.warn('GIF auto-scan failed', e);
+                if (found.length > 0) return found;
             }
-        }
+        } catch (e) { if (DEBUG) console.warn('GIF auto-scan failed', e); }
         return CONFIG.gifs.files.slice();
-    })();
+    })() : CONFIG.gifs.files.slice();
+    // ensure randomized order
     shuffleArray(pool);
     let idx = 0;
 
@@ -132,7 +118,13 @@ function stopGifFlybys() {
 
 function spawnGifFlyby(filename, duration = 3500) {
     try {
-        const src = `${CONFIG.gifs.folder}/${filename}`;
+        // allow either a filename (joined with folder) or a full/absolute URL
+        let src;
+        if (/^https?:\/\//i.test(filename) || filename.startsWith('/') || filename.includes(CONFIG.gifs.folder)) {
+            src = filename;
+        } else {
+            src = `${CONFIG.gifs.folder}/${filename}`;
+        }
         const img = document.createElement('img');
         img.src = src;
         img.className = 'gif-flyby';
