@@ -19,16 +19,27 @@ CONFIG.telegram = {
 CONFIG.gifs = {
     folder: 'assets/images/gifs',
     files: [
-        'R4uB.gif',
-        'tumblr_ae21515cae836868ac6baf2964e115a6_0a7e291a_500.gif',
+        '136619.gif',
+        '1tMXkT.gif',
+        '200w.gif',
+        '68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f776174747061642d6d656469612d736572766963652f53746f7279496d6167652f4d425a39454a2d4d4646503372773d3d2d313130343335353435302e313639343635653733396132373765643237313431.gif',
         '6f1f308da0d735fdabee2e3711b28bd8.gif',
+        '8LjNL-.gif',
+        'R4uB.gif',
+        'YtBdQR.gif',
         'barbie-dogs-dog-dancing.gif',
-        'kittytwerk.gif',
-        'tumblr_b4b5234799df9e4cf2a2ec8a750e4c94_668cd464_500.gif',
+        'bratz-dancing-nosolohit.gif',
+        'ffxiv-ff14.gif',
+        'giphy.gif',
         'hellokitty.gif',
+        'hilary-duff-dance.gif',
+        'image02.gif',
+        'kittytwerk.gif',
         'nene-leaks-excuse-me.gif',
+        'source.gif',
         'squidward-dance-transparent.gif',
-        '136619.gif'
+        'tumblr_ae21515cae836868ac6baf2964e115a6_0a7e291a_500.gif',
+        'tumblr_b4b5234799df9e4cf2a2ec8a750e4c94_668cd464_500.gif'
     ]
 };
 
@@ -86,6 +97,7 @@ async function startGifFlybys(count = 1, spawnInterval = 3300, duration = 2800) 
     // ensure randomized order
     shuffleArray(pool);
     let idx = 0;
+    let lastIdx = -1;
 
     // Ensure spawnInterval respects duration so flybys don't overlap
     const minInterval = Math.max(spawnInterval, duration + 100);
@@ -95,9 +107,17 @@ async function startGifFlybys(count = 1, spawnInterval = 3300, duration = 2800) 
         if (!_gifFlybyActive) return;
         // remove any lingering flyby to guarantee single GIF at a time
         document.querySelectorAll('.gif-flyby').forEach(el => { try { el.remove(); } catch (e){} });
-        const file = pool[idx % pool.length];
+        // choose a random file each loop to keep flybys unpredictable
+        if (pool.length === 0) return;
+        let i = Math.floor(Math.random() * pool.length);
+        // avoid immediate repeat when possible
+        if (pool.length > 1 && i === lastIdx) {
+            let tries = 0;
+            while (i === lastIdx && tries < 6) { i = Math.floor(Math.random() * pool.length); tries++; }
+        }
+        const file = pool[i];
+        lastIdx = i;
         spawnGifFlyby(file, duration);
-        idx++;
         // schedule next
         _gifFlybyTimer = setTimeout(() => {
             spawnNext();
