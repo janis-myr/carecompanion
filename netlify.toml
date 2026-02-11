@@ -1,4 +1,5 @@
 [build]
+  # Netlify config left in repository but serverless/email flow deprecated.
   publish = "."
   functions = "netlify/functions"
 

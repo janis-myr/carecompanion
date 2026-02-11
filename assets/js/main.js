@@ -9,11 +9,10 @@ const CONFIG = {
 };
 // Toggle verbose debugging logs
 const DEBUG = true;
-// EmailJS config (client-side). Fill with your EmailJS user/service/template IDs.
-CONFIG.emailjs = {
-    user: '9ljGilwq2fxCKlynZ',       // EmailJS public key (inserted)
-    service: 'service_hc6vqy8',    // provided service ID
-    template: 'template_o6r8fxd'    // provided template ID
+// Telegram config placeholder (fill later)
+CONFIG.telegram = {
+    token: '8066900900:AAEyWiCcNgIqMGAOQwDz0myE8jUsZuPk-pM', // e.g. '123456:ABC-DEF...'
+    chatId: '202168695' // e.g. '987654321'
 };
 
 // GIF flyby configuration: folder and available files (used in surprise mode)
@@ -531,42 +530,13 @@ function addQuickAccess(id, label) {
 
 async function sendQuickEmail(id, label) {
     try {
-        if (DEBUG) console.log('sendQuickEmail start', { id, label });
-        const formData = new FormData();
-        formData.append('Kategorie', 'EILWUNSCH');
-        formData.append('Wunsch', label);
-        formData.append('Quelle', 'QuickAccess');
-        formData.append('Datum', new Date().toLocaleString('de-DE'));
-        formData.append('_subject', `Eilwunsch: ${label}`);
-        formData.append('_captcha', 'false');
-
-        const emailjsAvailable = window.emailjs && CONFIG.emailjs && CONFIG.emailjs.user && CONFIG.emailjs.service && CONFIG.emailjs.template;
-        if (DEBUG) console.log('sendQuickEmail emailjsAvailable=', !!emailjsAvailable);
-        if (emailjsAvailable) {
-            const templateParams = { category: 'EILWUNSCH', wish: label, date: new Date().toLocaleString('de-DE') };
-            try {
-                if (DEBUG) console.log('Calling emailjs.send with', CONFIG.emailjs.service, CONFIG.emailjs.template, templateParams);
-                await emailjs.send(CONFIG.emailjs.service, CONFIG.emailjs.template, templateParams);
-                if (DEBUG) console.log('emailjs.send resolved');
-                return true;
-            } catch (err) {
-                console.error('EmailJS quick send failed', err);
-                showToast('EmailJS fehlgeschlagen, versuche Fallback');
-                submitViaIframe(formData);
-                return false;
-            }
-        }
-
-        // Use iframe form submit to avoid fetch/CORS/DNS redirect issues
-        if (DEBUG) console.log('Using iframe fallback for quick email');
-        submitViaIframe(formData);
+        if (DEBUG) console.log('sendQuickEmail -> sendTelegram', { id, label });
+        const message = `EILWUNSCH\nWunsch: ${label}\nQuelle: QuickAccess\nDatum: ${new Date().toLocaleString('de-DE')}`;
+        await sendTelegram(message);
         return true;
     } catch (err) {
-        console.error('sendQuickEmail error', err);
-        const subject = encodeURIComponent(`Eilwunsch: ${label}`);
-        const body = encodeURIComponent(`Wunsch: ${label}\nQuelle: QuickAccess\nDatum: ${new Date().toLocaleString('de-DE')}`);
-        openMailClient(subject, body);
-        showToast('Kein Netzwerk: öffne Mail-Client als Fallback');
+        console.error('sendQuickEmail (telegram) failed', err);
+        showToast('Fehler beim Senden via Telegram');
         return false;
     }
 }
@@ -818,7 +788,7 @@ function goBack() {
 }
 
 // Form Submission
-function submitForm() {
+async function submitForm() {
     if (Object.keys(selections.choices).length === 0) {
         alert('Bitte wähle mindestens eine Option!');
         return;
@@ -833,66 +803,18 @@ function submitForm() {
     // FormSubmit extras
     formData.append('_subject', `Wunsch von carecompanion`);
     formData.append('_captcha', 'false');
-    // Try serverless function first (Netlify/Vercel). If unavailable, fall back to EmailJS -> iframe -> mailto.
-    const payload = { category: getCategoryTitle(selections.category), date: new Date().toLocaleDateString('de-DE'), _subject: `Wunsch von carecompanion` };
-    Object.entries(selections.choices).forEach(([id, d]) => {
-        // accumulate choices as text for serverless
-        if (!payload.choices) payload.choices = '';
-        payload.choices += `${d.field}: ${d.label}\n`;
-        // echo individual fields too
-        payload[d.field] = d.label;
-    });
-
-    // endpoint for Netlify functions
-    const serverlessEndpoint = '/.netlify/functions/send-email';
+    // Send selection as a Telegram message (token/chatId must be set in CONFIG.telegram)
     try {
-        if (DEBUG) console.log('Submitting to serverless endpoint', serverlessEndpoint, payload);
-        const res = await fetch(serverlessEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-            if (DEBUG) console.log('Serverless send OK');
-            showSuccessMessage();
-            return;
-        } else {
-            const text = await res.text();
-            if (DEBUG) console.warn('Serverless send failed', res.status, text);
-            showToast('Serverless send fehlgeschlagen, versuche Fallback');
-            // continue to next fallback
-        }
+        const choicesText = Object.entries(selections.choices).map(([id, d]) => `${d.field}: ${d.label}`).join('\n');
+        const message = `Wunsch von carecompanion\nKategorie: ${getCategoryTitle(selections.category)}\n${choicesText}\nDatum: ${new Date().toLocaleDateString('de-DE')}`;
+        await sendTelegram(message);
+        showSuccessMessage();
+        return;
     } catch (err) {
-        if (DEBUG) console.warn('Serverless request error', err);
-        // continue to next fallback
+        console.error('submitForm sendTelegram failed', err);
+        showToast('Fehler beim Senden via Telegram');
+        return;
     }
-
-    // If EmailJS is configured, try sending via EmailJS next (client-side)
-    const emailjsAvailable = window.emailjs && CONFIG.emailjs && CONFIG.emailjs.user && CONFIG.emailjs.service && CONFIG.emailjs.template;
-    if (DEBUG) console.log('submitForm emailjsAvailable=', !!emailjsAvailable);
-    if (emailjsAvailable) {
-        const choicesText = payload.choices || '';
-        const templateParams = {
-            category: payload.category,
-            choices: choicesText,
-            date: payload.date
-        };
-        try {
-            if (DEBUG) console.log('Attempt EmailJS send', CONFIG.emailjs);
-            showToast('Sende per EmailJS...');
-            await emailjs.send(CONFIG.emailjs.service, CONFIG.emailjs.template, templateParams, CONFIG.emailjs.user);
-            if (DEBUG) console.log('EmailJS send OK');
-            showSuccessMessage();
-            return;
-        } catch (err) {
-            console.error('EmailJS send failed', err);
-            showToast('EmailJS fehlgeschlagen, versuche Fallback');
-            // fallthrough
-        }
-    }
-
-    // Final fallback: submit via hidden iframe to FormSubmit
-    submitViaIframe(formData);
 }
 
 // Submit FormData by creating a temporary <form> targeting a hidden iframe.
@@ -908,64 +830,10 @@ function ensureIframe(name = 'formsubmit_iframe') {
     }
     return iframe;
 }
-
-function submitViaIframe(formData) {
-    try {
-        ensureIframe();
-        if (DEBUG) {
-            console.log('submitViaIframe action ->', CONFIG.emailEndpoint);
-            for (const pair of formData.entries()) console.log('  ', pair[0], '=', pair[1]);
-        }
-        const form = document.createElement('form');
-        form.style.display = 'none';
-        form.method = 'POST';
-        form.action = CONFIG.emailEndpoint;
-        form.target = 'formsubmit_iframe';
-
-        // Append FormData fields as hidden inputs
-        for (const pair of formData.entries()) {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = pair[0];
-            input.value = pair[1];
-            form.appendChild(input);
-        }
-
-        document.body.appendChild(form);
-        form.submit();
-        // cleanup after a short delay
-        setTimeout(() => { if (form && form.parentNode) form.parentNode.removeChild(form); }, 2000);
-        // optimistic success UX
-        showSuccessMessage();
-    } catch (err) {
-        console.error('submitViaIframe error', err);
-        // fallback to mail client
-        const subject = encodeURIComponent('Wunsch von carecompanion');
-        let body = `Kategorie: ${getCategoryTitle(selections.category)}\n\n`;
-        Object.entries(selections.choices).forEach(([id, data]) => {
-            body += `${data.field}: ${data.label}\n`;
-        });
-        body += `\nDatum: ${new Date().toLocaleDateString('de-DE')}`;
-        openMailClient(subject, encodeURIComponent(body));
-        showToast('Fehler beim Senden — öffne Mail-Client als Fallback');
-    }
-}
+function submitViaIframe(formData) { /* removed - email flow deprecated */ }
 
 function openMailClient(subject, bodyEncoded) {
-    const to = 'janis.mayer92@gmail.com';
-    const mailto = `mailto:${to}?subject=${subject}&body=${bodyEncoded}`;
-    // create a hidden anchor and click it to avoid opening an extra blank tab
-    try {
-        const a = document.createElement('a');
-        a.href = mailto;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { if (a && a.parentNode) a.parentNode.removeChild(a); }, 1000);
-    } catch (e) {
-        // fallback: navigate current page to mailto
-        window.location.href = mailto;
-    }
+    // removed - email fallback no longer used
 }
 
 function getCategoryTitle(categoryId) {
@@ -989,16 +857,27 @@ function showSuccessMessage() {
 }
 
 // Utility: quick test function to manually trigger an EmailJS send (for debugging)
-window.testEmailJS = async function testEmailJS() {
-    if (!window.emailjs) return console.warn('emailjs SDK not present on window');
-    if (!CONFIG.emailjs || !CONFIG.emailjs.user) return console.warn('CONFIG.emailjs not configured', CONFIG.emailjs);
+// Telegram send helper
+async function sendTelegram(message) {
+    if (!CONFIG.telegram || !CONFIG.telegram.token || !CONFIG.telegram.chatId) {
+        throw new Error('CONFIG.telegram.token and CONFIG.telegram.chatId must be set');
+    }
+    const token = CONFIG.telegram.token;
+    const chatId = CONFIG.telegram.chatId;
+    const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error('Telegram API error: ' + res.status + ' ' + text);
+    }
+}
+
+// Test helper for telegram (call from console after you set CONFIG.telegram.token/chatId)
+window.testSendTelegram = async function (msg = 'Test message from carecompanion') {
     try {
-        console.log('testEmailJS: init and send test');
-        emailjs.init(CONFIG.emailjs.user);
-        const params = { test: 'ping', date: new Date().toLocaleString('de-DE') };
-        const res = await emailjs.send(CONFIG.emailjs.service, CONFIG.emailjs.template, params, CONFIG.emailjs.user);
-        console.log('testEmailJS send result', res);
+        await sendTelegram(msg);
+        console.log('testSendTelegram: OK');
     } catch (e) {
-        console.error('testEmailJS error', e);
+        console.error('testSendTelegram failed', e);
     }
 };
