@@ -141,21 +141,54 @@ body {
     text-shadow: 0 3px 10px rgba(0,0,0,0.6), 0 1px 0 rgba(255,255,255,0.04);
 }
 .surprise-mode .bg-white {
-    /* Stronger Liquid glass panel */
-    background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06)) !important;
-    border: 1px solid rgba(255,255,255,0.22);
-    backdrop-filter: blur(18px) saturate(1.12) contrast(0.98);
-    -webkit-backdrop-filter: blur(18px) saturate(1.12) contrast(0.98);
-    box-shadow: 0 12px 48px rgba(0,0,0,0.5) inset, 0 24px 120px rgba(255,64,128,0.18);
+    /* Stronger Liquid glass panel: increased blur, brighter rim and subtle glow */
+    position: relative;
+    background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.07)) !important;
+    border: 1px solid rgba(255,255,255,0.34);
+    backdrop-filter: blur(22px) saturate(1.18) contrast(1.0);
+    -webkit-backdrop-filter: blur(22px) saturate(1.18) contrast(1.0);
+    box-shadow: 0 14px 56px rgba(0,0,0,0.54) inset, 0 28px 140px rgba(255,64,128,0.18), 0 0 0 1px rgba(255,255,255,0.04) inset;
     color: rgba(17,17,17,0.95); /* darker text on frosted panels for readability */
 }
+/* soft rim glow using pseudo-element for clearer edges without changing markup */
+.surprise-mode .bg-white::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    box-shadow: 0 6px 30px rgba(255,64,128,0.09), 0 1px 0 rgba(255,255,255,0.06) inset;
+    mix-blend-mode: screen;
+    opacity: 0.95;
+}
 .surprise-mode .rounded-2xl { border-radius: 12px !important; }
-.urprise-mode_fix_placeholder {}
 .surprise-mode .shadow-2xl { box-shadow: 0 18px 80px rgba(0,0,0,0.55) !important; }
 
 /* flashy borders / ribbons */
 .surprise-mode .grid > div { outline: 2px solid rgba(255,255,255,0.06); transform: rotate(-0.8deg); background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); }
 .surprise-mode .grid > div:hover { transform: rotate(0deg) scale(1.03); filter: drop-shadow(0 18px 40px rgba(255,64,128,0.22)); }
+
+/* Suboptions: ensure buttons/cards are solid white for readability */
+.surprise-mode .suboptions-grid > div { background: transparent !important; transform: rotate(0deg) !important; }
+.surprise-mode .suboptions-grid > div > button { background: rgba(255,255,255,0.98) !important; color: #111827 !important; box-shadow: 0 10px 30px rgba(2,6,23,0.06); border: 1px solid rgba(0,0,0,0.04); }
+
+/* Make the selected/options confirmation area clearly white in surprise mode */
+.surprise-mode #selectedOptions {
+    /* Match the frosted liquid-glass style used for other large cards */
+    background: linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.07)) !important;
+    border: 1px solid rgba(255,255,255,0.34) !important;
+    backdrop-filter: blur(22px) saturate(1.18) contrast(1.0);
+    -webkit-backdrop-filter: blur(22px) saturate(1.18) contrast(1.0);
+    box-shadow: 0 14px 56px rgba(0,0,0,0.54) inset, 0 28px 140px rgba(255,64,128,0.08) !important;
+    color: #111827 !important;
+}
+.surprise-mode #selectedOptions .selected-option {
+    /* inner selection pills stay whiter for readability */
+    background: rgba(255,255,255,0.86) !important;
+    border: 1px solid rgba(255,255,255,0.6) !important;
+    box-shadow: 0 8px 22px rgba(2,6,23,0.06) !important;
+    color: #111827 !important;
+}
 
 /* Vista Netcenter entrance button bottom-right */
 #surpriseEntrance {
@@ -178,6 +211,9 @@ body {
     animation: pulseGlow 2.6s ease-in-out infinite;
 }
 #surpriseEntrance:hover { transform: translateY(-4px) scale(1.06); opacity: 1; box-shadow: 0 12px 40px rgba(255,20,147,0.22); }
+
+/* Hide the surprise/zeitreise entrance button while surprise-mode is active */
+.surprise-mode #surpriseEntrance { display: none !important; }
 
 @keyframes pulseGlow {
     0% { box-shadow: 0 6px 18px rgba(255,20,147,0.06); }
@@ -223,7 +259,7 @@ body {
     min-width: 420px; /* ensure at least ~double width */
     max-width: 92vw;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center; /* center contents so cover image is visually centered */
     gap: 18px;
     border-radius: 999px;
 }
@@ -238,7 +274,7 @@ body {
 .surprise-mode #surpriseAudioPlayer img { box-shadow: 0 14px 40px rgba(255,64,128,0.18); border: 1px solid rgba(255,255,255,0.06); }
 
 /* Audio cover halo that adapts to the image: a blurred, slightly scaled background copy */
-.audio-cover { position: relative; display: inline-block; border-radius: 14px; overflow: visible; }
+.audio-cover { position: relative; display: inline-flex; justify-content: center; align-items: center; border-radius: 14px; overflow: visible; margin: 0 auto; }
 .audio-cover img { display: block; width: 100%; height: auto; border-radius: 10px; position: relative; z-index: 2; }
 .audio-cover .cover-halo {
     position: absolute;
@@ -336,6 +372,14 @@ body {
 .pop-item { opacity: 0; transform: translateY(12px) scale(0.98); }
 .pop-in { animation: popIn 360ms cubic-bezier(.2,.9,.2,1) forwards; }
 @keyframes popIn { to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* Selected option styling for final selection box */
+.selected-option {
+    background: rgba(255,255,255,0.86);
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 8px 22px rgba(2,6,23,0.06);
+    color: #111827;
+}
 
 /* Center grid content on non-mobile */
 @media (min-width: 431px) {

@@ -167,35 +167,68 @@ async function loadPartials() {
         ]);
         if (h.ok) document.getElementById('headerContainer').innerHTML = await h.text();
         if (f.ok) document.getElementById('footerContainer').innerHTML = await f.text();
+        // attach convenient header click to return to main categories
+        try { attachHeaderClick(); } catch (e) { if (DEBUG) console.warn('attachHeaderClick failed', e); }
     } catch (err) {
         console.warn('Could not load partials', err);
     }
 }
 
-// Simple hash-based router: supports '#/category/<id>' and default view
-function handleRoute() {
-    const hash = (location.hash || '').replace(/^#/, '');
-    // expected format: '/category/massage'
-    if (!hash || hash === '/' || hash === '') {
+// Make header clickable: clicking the main header returns to the categories view
+function attachHeaderClick() {
+    const headerWrap = document.getElementById('headerContainer');
+    if (!headerWrap) return;
+    const hdr = headerWrap.querySelector('header');
+    if (!hdr) return;
+    hdr.style.cursor = 'pointer';
+    hdr.setAttribute('title', 'Zurück zur Hauptseite');
+    hdr.addEventListener('click', (e) => {
+        e.preventDefault();
+        // clear history and render categories (main page after password)
+        views.history = [];
         renderCategories();
-        return;
-    }
-
-    const parts = hash.split('/').filter(Boolean);
-    if (parts[0] === 'category' && parts[1]) {
-        const categoryId = parts[1];
-        selections.category = categoryId;
-        renderSubOptions(categoryId);
-        return;
-    }
-
-    // fallback
-    renderCategories();
+    });
 }
+
+// URL/hash routing removed — navigation is handled internally now.
+// Previously a hash-based router lived here; to keep the app state private
+// we now navigate by calling `renderSubOptions(categoryId)` directly.
 
 function pushHistory(tag) {
     if (!views.history) views.history = [];
     views.history.push(tag);
+}
+
+// Navigate back using our internal history stack
+function goBack() {
+    if (!views.history || views.history.length === 0) {
+        // nothing to go back to; show categories
+        renderCategories();
+        return;
+    }
+    const prev = views.history.pop();
+    if (!prev || !prev.view) { renderCategories(); return; }
+    switch (prev.view) {
+        case 'categories':
+            renderCategories();
+            break;
+        case 'decision':
+            startDecisionHelper();
+            break;
+        case 'sub':
+            // restore the category id if present
+            if (prev.category) {
+                selections.category = prev.category;
+                renderSubOptions(prev.category);
+            } else renderCategories();
+            break;
+        case 'grid':
+            // If we stored specific grid info, you'd restore it here; default to categories
+            renderCategories();
+            break;
+        default:
+            renderCategories();
+    }
 }
 
 // Password Gate Functions
@@ -239,9 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // initial route handling and listen for hash changes
-    handleRoute();
-    window.addEventListener('hashchange', handleRoute);
+    // routing disabled: we don't use URL hash changes anymore
     // initialize surprise mode UI
     initSurpriseMode();
     // initialize EmailJS if configured
@@ -392,12 +423,12 @@ function toggleAudioPlay() {
 // Rendering Functions
 function renderCategories() {
     views.currentView = 'categories';
+    // clear history when returning to root
     views.history = [];
     selections.category = null;
     selections.choices = {};
     
     const content = document.getElementById('mainContent');
-    document.getElementById('backButtonContainer').classList.add('hidden');
 
     // Primary: Decision helper button. Grid is collapsed by default.
     const html = `
@@ -424,11 +455,11 @@ function renderCategories() {
 // Render a grid for a given categories array
 function renderGrid(categoryArray) {
     const content = document.getElementById('mainContent');
-    document.getElementById('backButtonContainer').classList.add('hidden');
+    // push previous view onto history so goBack works
+    pushHistory({ view: views.currentView, category: selections.category });
+    views.currentView = 'grid';
     const html = `
-        <div class="mb-4 text-left">
-            <button onclick="renderCategories()" class="text-sm text-pink-600 hover:underline">← Zurück</button>
-        </div>
+        <!-- small back button removed; use the prominent back button below -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             ${categoryArray.map(cat => `
                 <div 
@@ -454,10 +485,12 @@ function showFullGrid() {
 
 function startDecisionHelper() {
     const content = document.getElementById('mainContent');
-    document.getElementById('backButtonContainer').classList.remove('hidden');
+    // push current view for back navigation
+    pushHistory({ view: views.currentView, category: selections.category });
+    views.currentView = 'decision';
     const html = `
         <div class="mb-4 text-left">
-            <button onclick="renderCategories()" class="text-sm text-pink-600 hover:underline">← Zurück</button>
+            <!-- small back button removed; use bottom big back button -->
         </div>
         <div class="bg-white rounded-2xl shadow-2xl p-8 mb-6">
             <h2 class="text-2xl font-bold text-pink-600 text-center mb-4">Was wünschst du dir gerade?</h2>
@@ -507,25 +540,29 @@ function toggleQuickPanel() {
 }
 
 function addQuickAccess(id, label) {
-    // toggle quick access selection
-    const wasSelected = !!selections.choices[id];
-    if (wasSelected) {
-        // deselect (clear all to enforce single-choice)
-        selections.choices = {};
-        updateSelectedMini();
-        updateButtonStates();
-        return;
-    }
+    // Quick-send: send immediately and show the thank-you feedback box (no persistent selection)
+    try {
+        // Close quick panel if open
+        const panel = document.getElementById('quickPanel');
+        if (panel && panel.classList.contains('open')) toggleQuickPanel();
 
-    // single-select: replace any previous selection and immediately send e-mail for quick wishes
-    selections.choices = {};
-    selections.choices[id] = { label, field: 'EILHILFE' };
-    updateSelectedMini();
-    updateButtonStates();
-    sendQuickEmail(id, label).then(ok => {
-        if (ok) showToast('E‑Mail gesendet ✔');
-        else showToast('Fehler beim Senden der E‑Mail');
-    });
+        // build a choice payload for the message (transient, not stored in selections)
+        const tempChoice = { label, field: 'EILWUNSCH' };
+        if (DEBUG) console.log('QuickAccess triggered', { id, label });
+
+        // attempt to send via Telegram (sendQuickEmail handles errors)
+        sendQuickEmail(id, label).then(ok => {
+            if (ok) {
+                // show the full success/thank-you screen like the decision flow
+                showSuccessMessage();
+            } else {
+                showToast('Fehler beim Senden der Nachricht');
+            }
+        });
+    } catch (e) {
+        console.error('addQuickAccess error', e);
+        showToast('Unerwarteter Fehler');
+    }
 }
 
 async function sendQuickEmail(id, label) {
@@ -615,14 +652,19 @@ function decisionChoose(choice) {
 }
 
 function selectCategory(categoryId) {
-    // navigate via hash so each category has its own address
-    location.hash = `/category/${categoryId}`;
+    // Navigate internally without touching the URL
+    // remember previous view for back navigation
+    pushHistory({ view: views.currentView, category: selections.category });
+    selections.category = categoryId;
+    renderSubOptions(categoryId);
 }
 
 function renderSubOptions(categoryId) {
     const subOption = views.subOptions[categoryId];
     const content = document.getElementById('mainContent');
-    document.getElementById('backButtonContainer').classList.remove('hidden');
+    // push previous view and show the large back button
+    pushHistory({ view: views.currentView, category: selections.category });
+    views.currentView = 'sub';
     // Build options HTML safely (avoid embedding async logic inside template literals)
     const optionsHtml = subOption.options.map(opt => {
         if (opt.needsInput) {
@@ -630,7 +672,7 @@ function renderSubOptions(categoryId) {
                 <div class="flex flex-col">
                     <button 
                         onclick="selectOptionWithInput('${opt.id.replace(/'/g, "\\'")}', '${opt.label.replace(/'/g, "\\'")}', '${opt.field.replace(/'/g, "\\'")}')"
-                        class="p-4 border-2 border-pink-300 rounded-lg hover:bg-pink-50 hover:border-pink-500 transition-all duration-300 text-left group"
+                        class="p-4 bg-white border-2 border-pink-300 rounded-lg hover:bg-pink-50 hover:border-pink-500 transition-all duration-300 text-left group"
                         data-option-id="${opt.id}"
                     >
                         <div class="font-semibold text-gray-700 group-hover:text-pink-600">${opt.label}</div>
@@ -644,7 +686,7 @@ function renderSubOptions(categoryId) {
             <div>
                 <button 
                     onclick="selectOption('${opt.id.replace(/'/g, "\\'")}', '${opt.label.replace(/'/g, "\\'")}', '${opt.field.replace(/'/g, "\\'")}')"
-                    class="p-4 border-2 border-pink-300 rounded-lg hover:bg-pink-50 hover:border-pink-500 transition-all duration-300 text-left group w-full text-left"
+                    class="p-4 bg-white border-2 border-pink-300 rounded-lg hover:bg-pink-50 hover:border-pink-500 transition-all duration-300 text-left group w-full text-left"
                     data-option-id="${opt.id}"
                 >
                     <div class="font-semibold text-gray-700 group-hover:text-pink-600">${opt.label}</div>
@@ -655,12 +697,10 @@ function renderSubOptions(categoryId) {
     }).join('');
 
     const html = `
-        <div class="mb-4 text-left">
-            <button onclick="renderCategories()" class="text-sm text-pink-600 hover:underline">← Zurück</button>
-        </div>
+        <!-- small back button removed; use bottom big back button -->
         <div class="bg-white rounded-2xl shadow-2xl p-8 mb-6">
             <h2 class="text-3xl font-bold text-pink-600 text-center mb-8">${subOption.title}</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid suboptions-grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 ${optionsHtml}
             </div>
         </div>
@@ -747,7 +787,7 @@ function updateSelectedOptions() {
     if (Object.keys(selections.choices).length > 0) {
         selectedDiv.classList.remove('hidden');
         selectedList.innerHTML = Object.entries(selections.choices).map(([id, data]) => `
-            <div class="flex items-center justify-between bg-pink-50 p-3 rounded-lg">
+            <div class="flex items-center justify-between selected-option p-3 rounded-lg">
                 <span class="text-gray-700">
                     <strong>${data.field}:</strong> ${data.label}
                 </span>
@@ -783,8 +823,7 @@ function removeSelection(optionId) {
 }
 
 function goBack() {
-    // use browser history to go back; hashchange listener will update content
-    history.back();
+    // legacy stub removed — navigation handled via internal history stack
 }
 
 // Form Submission
@@ -843,7 +882,6 @@ function getCategoryTitle(categoryId) {
 
 function showSuccessMessage() {
     const content = document.getElementById('mainContent');
-    document.getElementById('backButtonContainer').classList.add('hidden');
     
     content.innerHTML = `
         <div class="bg-white rounded-2xl shadow-2xl p-12 text-center fade-in">
