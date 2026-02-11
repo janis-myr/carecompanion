@@ -32,6 +32,11 @@ CONFIG.gifs = {
     ]
 };
 
+// allow auto-scan of the gifs folder when possible (will try to parse directory listing HTML)
+// set to true to attempt automatic discovery of added GIFs; if server doesn't allow
+// directory listing we'll gracefully fall back to the explicit `files` list.
+CONFIG.gifs.autoScan = true;
+
 // GIF flyby runtime state
 let _gifFlybyTimer = null;
 let _gifFlybyActive = false;
@@ -44,15 +49,60 @@ function shuffleArray(arr) {
     }
 }
 
-function startGifFlybys(count = 1, spawnInterval = 4200, duration = 3500) {
+async function startGifFlybys(count = 1, spawnInterval = 3300, duration = 2800) {
     if (_gifFlybyActive) return;
     _gifFlybyActive = true;
-    const pool = CONFIG.gifs.files.slice();
+    // build runtime pool (try index.json first, then auto-scan directory listing, otherwise use configured list)
+    const pool = await (async function buildGifPool() {
+        if (CONFIG.gifs.autoScan) {
+            // Try explicit index.json first (reliable across hosts)
+            try {
+                const idxUrl = `${CONFIG.gifs.folder.replace(/\/$/, '')}/index.json`;
+                const idxRes = await fetch(idxUrl, { method: 'GET' });
+                if (idxRes.ok) {
+                    const arr = await idxRes.json();
+                    if (Array.isArray(arr) && arr.length > 0) return arr.slice();
+                }
+            } catch (e) {
+                if (DEBUG) console.warn('GIF index.json fetch failed', e);
+            }
+
+            // fallback: try directory HTML listing parsing
+            try {
+                const folderUrl = CONFIG.gifs.folder.replace(/\/$/, '') + '/';
+                const res = await fetch(folderUrl, { method: 'GET' });
+                const ct = res.headers.get('content-type') || '';
+                if (res.ok && ct.includes('text/html')) {
+                    const html = await res.text();
+                    // simple regex to find links to gif files in directory listing
+                    const re = /href="([^\"]+\.(?:gif|GIF))"/g;
+                    const found = [];
+                    let m;
+                    while ((m = re.exec(html)) !== null) {
+                        let p = m[1];
+                        // normalize: if the link is absolute or relative
+                        if (!p.startsWith('http') && !p.startsWith('/')) {
+                            // relative to folderUrl
+                            p = folderUrl + p;
+                        }
+                        // extract filename
+                        const parts = p.split('/');
+                        const filename = parts[parts.length - 1];
+                        if (filename && !found.includes(filename)) found.push(filename);
+                    }
+                    if (found.length > 0) return found;
+                }
+            } catch (e) {
+                if (DEBUG) console.warn('GIF auto-scan failed', e);
+            }
+        }
+        return CONFIG.gifs.files.slice();
+    })();
     shuffleArray(pool);
     let idx = 0;
 
     // Ensure spawnInterval respects duration so flybys don't overlap
-    const minInterval = Math.max(spawnInterval, duration + 150);
+    const minInterval = Math.max(spawnInterval, duration + 100);
 
     // sequential spawn: spawn one, wait duration+gap, then spawn next
     function spawnNext() {
@@ -74,7 +124,7 @@ function startGifFlybys(count = 1, spawnInterval = 4200, duration = 3500) {
 
 function stopGifFlybys() {
     _gifFlybyActive = false;
-    if (_gifFlybyTimer) { clearInterval(_gifFlybyTimer); _gifFlybyTimer = null; }
+    if (_gifFlybyTimer) { clearTimeout(_gifFlybyTimer); _gifFlybyTimer = null; }
     if (_gifFlybyStartDelayTimer) { clearTimeout(_gifFlybyStartDelayTimer); _gifFlybyStartDelayTimer = null; }
     // remove any live gif elements
     document.querySelectorAll('.gif-flyby').forEach(el => { try { el.remove(); } catch (e){} });
@@ -93,11 +143,12 @@ function spawnGifFlyby(filename, duration = 3500) {
         img.style.opacity = '1';
         img.style.transition = `transform ${duration}ms linear, opacity 300ms ease`;
 
-        // choose a random display width so sizes vary, but keep them reasonable
+        // choose a random display width so sizes vary; make GIFs a bit larger
         const vw = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
-        const minW = Math.max(64, Math.floor(vw * 0.12));
-        const maxW = Math.max(120, Math.floor(vw * 0.22));
-        const displayW = Math.floor(minW + Math.random() * (maxW - minW));
+        // increase size range: ~16% - 32% of viewport width (with sensible pixel clamps)
+        const minW = Math.max(96, Math.floor(vw * 0.16));
+        const maxW = Math.max(180, Math.floor(vw * 0.32));
+        const displayW = Math.floor(minW + Math.random() * Math.max(1, (maxW - minW)));
         img.style.width = displayW + 'px';
 
         // initial placement: top:0, left random so the gif stays fully within viewport width
@@ -398,9 +449,9 @@ function toggleSurpriseMode(enable) {
         try {
             if (_gifFlybyStartDelayTimer) clearTimeout(_gifFlybyStartDelayTimer);
             _gifFlybyStartDelayTimer = setTimeout(() => {
-                try { startGifFlybys(1, 4200, 3500); } catch (e) { if (DEBUG) console.warn('startGifFlybys failed', e); }
+                try { startGifFlybys(1, 3300, 2800); } catch (e) { if (DEBUG) console.warn('startGifFlybys failed', e); }
                 _gifFlybyStartDelayTimer = null;
-            }, 29000);
+            }, 30000);
         } catch (e) { if (DEBUG) console.warn('scheduling gif flybys failed', e); }
     } else if (audio) {
         audio.pause();
